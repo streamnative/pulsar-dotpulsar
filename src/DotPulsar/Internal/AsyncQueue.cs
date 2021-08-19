@@ -42,6 +42,7 @@ namespace DotPulsar.Internal
                 ThrowIfDisposed();
 
                 var node = _pendingDequeues.First;
+
                 if (node is not null)
                 {
                     node.Value.SetResult(item);
@@ -51,6 +52,11 @@ namespace DotPulsar.Internal
                 else
                     _queue.Enqueue(item);
             }
+        }
+
+        public int Count
+        {
+            get { return _queue.Count; }
         }
 
         public ValueTask<T> Dequeue(CancellationToken cancellationToken = default)

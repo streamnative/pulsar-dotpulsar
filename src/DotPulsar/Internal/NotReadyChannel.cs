@@ -31,10 +31,11 @@ namespace DotPulsar.Internal
         public ValueTask ClosedByClient(CancellationToken cancellationToken)
             => new();
 
-        public ValueTask<IMessage<TMessage>> Receive(CancellationToken cancellationToken = default)
+        public ValueTask<IMessage<TMessage>> Receive(string topic, CancellationToken cancellationToken = default)
             => throw GetException();
 
-        public Task<CommandSendReceipt> Send(MessageMetadata metadata, ReadOnlySequence<byte> payload, CancellationToken cancellationToken)
+        public Task<CommandSendReceipt> Send(MessageMetadata metadata, ReadOnlySequence<byte> payload,
+            CancellationToken cancellationToken)
             => throw GetException();
 
         public Task Send(CommandAck command, CancellationToken cancellationToken)
@@ -49,7 +50,7 @@ namespace DotPulsar.Internal
         public Task Send(CommandSeek command, CancellationToken cancellationToken)
             => throw GetException();
 
-        public Task<MessageId> Send(CommandGetLastMessageId command, CancellationToken cancellationToken)
+        public Task<MessageId> Send(string topic, CommandGetLastMessageId command, CancellationToken cancellationToken)
             => throw GetException();
 
         private static Exception GetException()

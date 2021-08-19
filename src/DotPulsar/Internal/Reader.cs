@@ -17,8 +17,8 @@ namespace DotPulsar.Internal
     using Abstractions;
     using DotPulsar.Abstractions;
     using DotPulsar.Exceptions;
-    using DotPulsar.Internal.PulsarApi;
     using Events;
+    using PulsarApi;
     using System;
     using System.Threading;
     using System.Threading.Tasks;
@@ -71,16 +71,17 @@ namespace DotPulsar.Internal
         public bool IsFinalState(ReaderState state)
             => _state.IsFinalState(state);
 
-        public async ValueTask<MessageId> GetLastMessageId(CancellationToken cancellationToken)
+        public async ValueTask<IMessageId> GetLastMessageId(CancellationToken cancellationToken)
         {
             ThrowIfDisposed();
 
             var getLastMessageId = new CommandGetLastMessageId();
+
             return await _executor.Execute(() => GetLastMessageId(getLastMessageId, cancellationToken), cancellationToken).ConfigureAwait(false);
         }
 
         private async ValueTask<MessageId> GetLastMessageId(CommandGetLastMessageId command, CancellationToken cancellationToken)
-            => await _channel.Send(command, cancellationToken).ConfigureAwait(false);
+            => await _channel.Send(Topic, command, cancellationToken).ConfigureAwait(false);
 
         public async ValueTask<IMessage<TMessage>> Receive(CancellationToken cancellationToken)
         {
@@ -90,7 +91,7 @@ namespace DotPulsar.Internal
         }
 
         private async ValueTask<IMessage<TMessage>> ReceiveMessage(CancellationToken cancellationToken)
-            => await _channel.Receive(cancellationToken).ConfigureAwait(false);
+            => await _channel.Receive(Topic, cancellationToken).ConfigureAwait(false);
 
         public async ValueTask Seek(MessageId messageId, CancellationToken cancellationToken)
         {

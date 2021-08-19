@@ -61,17 +61,13 @@ namespace DotPulsar.Internal
 
             _lock = new AsyncLock();
 
-            _cachedCommandFlow = new CommandFlow
-            {
-                ConsumerId = id,
-                MessagePermits = messagePrefetchCount
-            };
+            _cachedCommandFlow = new CommandFlow { ConsumerId = id, MessagePermits = messagePrefetchCount };
 
             _sendWhenZero = 0;
             _firstFlow = true;
         }
 
-        public async ValueTask<IMessage<TMessage>> Receive(CancellationToken cancellationToken)
+        public async ValueTask<IMessage<TMessage>> Receive(string topic, CancellationToken cancellationToken)
         {
             using (await _lock.Lock(cancellationToken).ConfigureAwait(false))
             {
@@ -86,6 +82,12 @@ namespace DotPulsar.Internal
 
                     if (message is not null)
                         return message;
+
+                    // Avoid waiting until an empty queue.
+                    if (_queue.Count == 0)
+                    {
+                        return null;
+                    }
 
                     var messagePackage = await _queue.Dequeue(cancellationToken).ConfigureAwait(false);
 
@@ -102,6 +104,7 @@ namespace DotPulsar.Internal
                     if (metadata.Compression != CompressionType.None)
                     {
                         var decompressor = _decompressors[(int) metadata.Compression];
+
                         if (decompressor is null)
                             throw new CompressionException($"Support for {metadata.Compression} compression was not found");
 
@@ -127,12 +130,13 @@ namespace DotPulsar.Internal
                         }
                         catch
                         {
-                            await RejectPackage(messagePackage, CommandAck.ValidationErrorType.BatchDeSerializeError, cancellationToken).ConfigureAwait(false);
+                            await RejectPackage(messagePackage, CommandAck.ValidationErrorType.BatchDeSerializeError,
+                                cancellationToken).ConfigureAwait(false);
                             continue;
                         }
                     }
 
-                    return _messageFactory.Create(messageId.ToMessageId(), redeliveryCount, data, metadata);
+                    return _messageFactory.Create(topic, messageId.ToMessageId(topic), redeliveryCount, data, metadata);
                 }
             }
         }
@@ -176,12 +180,12 @@ namespace DotPulsar.Internal
             _batchHandler.Clear();
         }
 
-        public async Task<MessageId> Send(CommandGetLastMessageId command, CancellationToken cancellationToken)
+        public async Task<MessageId> Send(string topic, CommandGetLastMessageId command, CancellationToken cancellationToken)
         {
             command.ConsumerId = _id;
             var response = await _connection.Send(command, cancellationToken).ConfigureAwait(false);
             response.Expect(BaseCommand.Type.GetLastMessageIdResponse);
-            return response.GetLastMessageIdResponse.LastMessageId.ToMessageId();
+            return response.GetLastMessageIdResponse.LastMessageId.ToMessageId(topic);
         }
 
         public async ValueTask DisposeAsync()
@@ -211,11 +215,7 @@ namespace DotPulsar.Internal
 
         private async Task RejectPackage(MessagePackage messagePackage, CommandAck.ValidationErrorType validationErrorType, CancellationToken cancellationToken)
         {
-            var ack = new CommandAck
-            {
-                Type = CommandAck.AckType.Individual,
-                ValidationError = validationErrorType
-            };
+            var ack = new CommandAck { Type = CommandAck.AckType.Individual, ValidationError = validationErrorType };
 
             ack.MessageIds.Add(messagePackage.MessageId);
 

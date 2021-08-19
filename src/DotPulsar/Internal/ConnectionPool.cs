@@ -52,7 +52,9 @@ namespace DotPulsar.Internal
             _listenerName = listenerName;
             _connections = new ConcurrentDictionary<PulsarUrl, Connection>();
             _cancellationTokenSource = new CancellationTokenSource();
-            _closeInactiveConnections = CloseInactiveConnections(closeInactiveConnectionsInterval, _cancellationTokenSource.Token);
+
+            _closeInactiveConnections =
+                CloseInactiveConnections(closeInactiveConnectionsInterval, _cancellationTokenSource.Token);
         }
 
         public async ValueTask DisposeAsync()
@@ -71,12 +73,7 @@ namespace DotPulsar.Internal
 
         public async ValueTask<IConnection> FindConnectionForTopic(string topic, CancellationToken cancellationToken)
         {
-            var lookup = new CommandLookupTopic
-            {
-                Topic = topic,
-                Authoritative = false,
-                AdvertisedListenerName = _listenerName
-            };
+            var lookup = new CommandLookupTopic { Topic = topic, Authoritative = false, AdvertisedListenerName = _listenerName };
 
             var physicalUrl = _serviceUrl;
 
@@ -94,7 +91,8 @@ namespace DotPulsar.Internal
 
                 var lookupResponseServiceUrl = new Uri(GetBrokerServiceUrl(response.LookupTopicResponse));
 
-                if (response.LookupTopicResponse.Response == CommandLookupTopicResponse.LookupType.Redirect || !response.LookupTopicResponse.Authoritative)
+                if (response.LookupTopicResponse.Response == CommandLookupTopicResponse.LookupType.Redirect ||
+                    !response.LookupTopicResponse.Authoritative)
                 {
                     physicalUrl = lookupResponseServiceUrl;
                     continue;
@@ -122,11 +120,13 @@ namespace DotPulsar.Internal
             {
                 case EncryptionPolicy.EnforceEncrypted:
                     if (!hasBrokerServiceUrlTls)
-                        throw new ConnectionSecurityException("Cannot enforce encrypted connections. The lookup topic response from broker gave no secure alternative.");
+                        throw new ConnectionSecurityException(
+                            "Cannot enforce encrypted connections. The lookup topic response from broker gave no secure alternative.");
                     return response.BrokerServiceUrlTls;
                 case EncryptionPolicy.EnforceUnencrypted:
                     if (!hasBrokerServiceUrl)
-                        throw new ConnectionSecurityException("Cannot enforce unencrypted connections. The lookup topic response from broker gave no unsecure alternative.");
+                        throw new ConnectionSecurityException(
+                            "Cannot enforce unencrypted connections. The lookup topic response from broker gave no unsecure alternative.");
                     return response.BrokerServiceUrl;
                 case EncryptionPolicy.PreferEncrypted:
                     return hasBrokerServiceUrlTls ? response.BrokerServiceUrlTls : response.BrokerServiceUrl;
@@ -135,9 +135,9 @@ namespace DotPulsar.Internal
             }
         }
 
-        private ValueTask<Connection> GetConnection(Uri serviceUrl, CancellationToken cancellationToken)
+        public async ValueTask<IConnection> GetConnection(Uri serviceUrl, CancellationToken cancellationToken)
         {
-            return GetConnection(new PulsarUrl(serviceUrl,serviceUrl), cancellationToken);
+            return await GetConnection(new PulsarUrl(serviceUrl, serviceUrl), cancellationToken).ConfigureAwait(false);
         }
 
         private async ValueTask<Connection> GetConnection(PulsarUrl url, CancellationToken cancellationToken)
@@ -204,9 +204,11 @@ namespace DotPulsar.Internal
                     using (await _lock.Lock(cancellationToken).ConfigureAwait(false))
                     {
                         var serviceUrls = _connections.Keys;
+
                         foreach (var serviceUrl in serviceUrls)
                         {
                             var connection = _connections[serviceUrl];
+
                             if (connection is null)
                                 continue;
 

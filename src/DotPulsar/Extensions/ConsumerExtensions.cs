@@ -14,8 +14,8 @@
 
 namespace DotPulsar.Extensions
 {
-    using DotPulsar.Abstractions;
-    using DotPulsar.Internal;
+    using Abstractions;
+    using Internal;
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
@@ -30,13 +30,15 @@ namespace DotPulsar.Extensions
         /// <summary>
         /// Acknowledge the consumption of a single message.
         /// </summary>
-        public static async ValueTask Acknowledge(this IConsumer consumer, IMessage message, CancellationToken cancellationToken = default)
+        public static async ValueTask Acknowledge(this IConsumer consumer, IMessage message,
+            CancellationToken cancellationToken = default)
             => await consumer.Acknowledge(message.MessageId, cancellationToken).ConfigureAwait(false);
 
         /// <summary>
         /// Acknowledge the consumption of all the messages in the topic up to and including the provided message.
         /// </summary>
-        public static async ValueTask AcknowledgeCumulative(this IConsumer consumer, IMessage message, CancellationToken cancellationToken = default)
+        public static async ValueTask AcknowledgeCumulative(this IConsumer consumer, IMessage message,
+            CancellationToken cancellationToken = default)
             => await consumer.AcknowledgeCumulative(message.MessageId, cancellationToken).ConfigureAwait(false);
 
         /// <summary>
@@ -83,11 +85,7 @@ namespace DotPulsar.Extensions
                     {
                         activity.SetTag("otel.status_code", "ERROR");
 
-                        var exceptionTags = new ActivityTagsCollection
-                        {
-                            { "exception.type", exception.GetType().FullName },
-                            { "exception.stacktrace", exception.ToString() }
-                        };
+                        var exceptionTags = new ActivityTagsCollection { { "exception.type", exception.GetType().FullName }, { "exception.stacktrace", exception.ToString() } };
 
                         if (!string.IsNullOrWhiteSpace(exception.Message))
                             exceptionTags.Add("exception.message", exception.Message);
@@ -99,22 +97,26 @@ namespace DotPulsar.Extensions
 
                 activity?.Dispose();
 
-                await consumer.Acknowledge(message.MessageId, cancellationToken).ConfigureAwait(false);
+                await consumer.Acknowledge(message, cancellationToken).ConfigureAwait(false);
             }
         }
 
-        private static Activity? StartActivity(IMessage message, string operationName, IEnumerable<KeyValuePair<string, object?>> tags)
+        private static Activity? StartActivity(IMessage message, string operationName,
+            IEnumerable<KeyValuePair<string, object?>> tags)
         {
             if (!DotPulsarActivitySource.ActivitySource.HasListeners())
                 return null;
 
             var properties = message.Properties;
 
-            if (properties.TryGetValue("traceparent", out var traceparent))  // TODO Allow the user to overwrite the keys 'traceparent' and 'tracestate'
+            if (properties.TryGetValue("traceparent",
+                out var traceparent)) // TODO Allow the user to overwrite the keys 'traceparent' and 'tracestate'
             {
                 var tracestate = properties.ContainsKey("tracestate") ? properties["tracestrate"] : null;
+
                 if (ActivityContext.TryParse(traceparent, tracestate, out var activityContext))
-                    return DotPulsarActivitySource.ActivitySource.StartActivity(operationName, ActivityKind.Consumer, activityContext, tags);
+                    return DotPulsarActivitySource.ActivitySource.StartActivity(operationName, ActivityKind.Consumer,
+                        activityContext, tags);
             }
 
             var activity = DotPulsarActivitySource.ActivitySource.StartActivity(operationName, ActivityKind.Consumer);
@@ -137,7 +139,8 @@ namespace DotPulsar.Extensions
         /// <remarks>
         /// If the state change to a final state, then all awaiting tasks will complete.
         /// </remarks>
-        public static async ValueTask<ConsumerStateChanged> StateChangedTo(this IConsumer consumer, ConsumerState state, CancellationToken cancellationToken = default)
+        public static async ValueTask<ConsumerStateChanged> StateChangedTo(this IConsumer consumer, ConsumerState state,
+            CancellationToken cancellationToken = default)
         {
             var newState = await consumer.OnStateChangeTo(state, cancellationToken).ConfigureAwait(false);
             return new ConsumerStateChanged(consumer, newState);
@@ -152,7 +155,8 @@ namespace DotPulsar.Extensions
         /// <remarks>
         /// If the state change to a final state, then all awaiting tasks will complete.
         /// </remarks>
-        public static async ValueTask<ConsumerStateChanged> StateChangedFrom(this IConsumer consumer, ConsumerState state, CancellationToken cancellationToken = default)
+        public static async ValueTask<ConsumerStateChanged> StateChangedFrom(this IConsumer consumer,
+            ConsumerState state, CancellationToken cancellationToken = default)
         {
             var newState = await consumer.OnStateChangeFrom(state, cancellationToken).ConfigureAwait(false);
             return new ConsumerStateChanged(consumer, newState);

@@ -14,9 +14,9 @@
 
 namespace DotPulsar.Internal
 {
+    using Abstractions;
     using DotPulsar.Abstractions;
-    using DotPulsar.Internal.Abstractions;
-    using DotPulsar.Internal.PulsarApi;
+    using PulsarApi;
     using System.Buffers;
     using System.Collections.Generic;
 
@@ -24,7 +24,8 @@ namespace DotPulsar.Internal
     {
         private static readonly Dictionary<string, string> _empty;
 
-        static MessageFactory() => _empty = new Dictionary<string, string>();
+        static MessageFactory()
+            => _empty = new Dictionary<string, string>();
 
         private static IReadOnlyDictionary<string, string> FromKeyValueList(List<KeyValue> keyValues)
         {
@@ -47,21 +48,25 @@ namespace DotPulsar.Internal
         public MessageFactory(ISchema<TValue> schema)
             => _schema = schema;
 
-        public IMessage<TValue> Create(MessageId messageId, uint redeliveryCount, ReadOnlySequence<byte> data, MessageMetadata metadata, SingleMessageMetadata? singleMetadata = null)
+        public IMessage<TValue> Create(string topic, MessageId messageId, uint redeliveryCount,
+            ReadOnlySequence<byte> data, MessageMetadata metadata, SingleMessageMetadata?
+                singleMetadata = null)
         {
             if (singleMetadata is null)
-                return Create(messageId, redeliveryCount, metadata, data);
+                return Create(topic, messageId, redeliveryCount, metadata, data);
 
-            return Create(messageId, redeliveryCount, metadata, singleMetadata, data);
+            return Create(topic, messageId, redeliveryCount, metadata, singleMetadata, data);
         }
 
         private Message<TValue> Create(
+            string topic,
             MessageId messageId,
             uint redeliveryCount,
             MessageMetadata metadata,
             ReadOnlySequence<byte> data)
         {
             return new Message<TValue>(
+                topic: topic,
                 messageId: messageId,
                 data: data,
                 producerName: metadata.ProducerName,
@@ -78,6 +83,7 @@ namespace DotPulsar.Internal
         }
 
         private Message<TValue> Create(
+            string topic,
             MessageId messageId,
             uint redeliveryCount,
             MessageMetadata metadata,
@@ -85,6 +91,7 @@ namespace DotPulsar.Internal
             ReadOnlySequence<byte> data)
         {
             return new Message<TValue>(
+                topic: topic,
                 messageId: messageId,
                 data: data,
                 producerName: metadata.ProducerName,

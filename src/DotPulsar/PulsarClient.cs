@@ -15,11 +15,11 @@
 namespace DotPulsar
 {
     using Abstractions;
-    using DotPulsar.Internal.Compression;
-    using DotPulsar.Internal.PulsarApi;
     using Exceptions;
     using Internal;
     using Internal.Abstractions;
+    using Internal.Compression;
+    using Internal.PulsarApi;
     using System;
     using System.Linq;
     using System.Threading;
@@ -65,9 +65,11 @@ namespace DotPulsar
             ThrowIfDisposed();
 
             ICompressorFactory? compressorFactory = null;
+
             if (options.CompressionType != CompressionType.None)
             {
                 var compressionType = (Internal.PulsarApi.CompressionType) options.CompressionType;
+
                 compressorFactory = CompressionFactories.CompressorFactories().SingleOrDefault(f => f.CompressionType == compressionType);
 
                 if (compressorFactory is null)
@@ -106,6 +108,7 @@ namespace DotPulsar
 
             var correlationId = Guid.NewGuid();
             var subscription = $"Reader-{correlationId:N}";
+
             var subscribe = new CommandSubscribe
             {
                 ConsumerName = options.ReaderName ?? subscription,
@@ -117,13 +120,16 @@ namespace DotPulsar
             };
             var messagePrefetchCount = options.MessagePrefetchCount;
             var messageFactory = new MessageFactory<TMessage>(options.Schema);
-            var batchHandler = new BatchHandler<TMessage>(false, messageFactory);
+            var batchHandler = new BatchHandler<TMessage>(options.Topic, false, messageFactory);
             var decompressorFactories = CompressionFactories.DecompressorFactories();
-            var factory = new ConsumerChannelFactory<TMessage>(correlationId, _processManager, _connectionPool, subscribe, messagePrefetchCount, batchHandler, messageFactory, decompressorFactories);
+
+            var factory = new ConsumerChannelFactory<TMessage>(correlationId, _processManager, _connectionPool, subscribe, messagePrefetchCount, batchHandler, messageFactory,
+                decompressorFactories);
             var stateManager = new StateManager<ReaderState>(ReaderState.Disconnected, ReaderState.Closed, ReaderState.ReachedEndOfTopic, ReaderState.Faulted);
             var initialChannel = new NotReadyChannel<TMessage>();
             var executor = new Executor(correlationId, _processManager, _exceptionHandler);
             var reader = new Reader<TMessage>(correlationId, ServiceUrl, options.Topic, _processManager, initialChannel, executor, stateManager, factory);
+
             if (options.StateChangedHandler is not null)
                 _ = StateMonitor.MonitorReader(reader, options.StateChangedHandler);
             var process = new ReaderProcess(correlationId, stateManager, reader);

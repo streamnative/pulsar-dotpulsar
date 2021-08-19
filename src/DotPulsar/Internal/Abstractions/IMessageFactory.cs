@@ -15,11 +15,13 @@
 namespace DotPulsar.Internal.Abstractions
 {
     using DotPulsar.Abstractions;
-    using DotPulsar.Internal.PulsarApi;
+    using PulsarApi;
     using System.Buffers;
 
     public interface IMessageFactory<TValue>
     {
-        IMessage<TValue> Create(MessageId messageId, uint redeliveryCount, ReadOnlySequence<byte> data, MessageMetadata metadata, SingleMessageMetadata? singleMetadata = null);
+        IMessage<TValue> Create(string topic, MessageId messageId, uint redeliveryCount, ReadOnlySequence<byte> data,
+            MessageMetadata metadata, SingleMessageMetadata? singleMetadata
+                = null);
     }
 }

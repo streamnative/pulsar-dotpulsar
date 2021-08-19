@@ -33,7 +33,9 @@ namespace DotPulsar.Internal
             _requestResponseHandler = new RequestResponseHandler();
             _consumerChannels = new IdLookup<IChannel>();
             _producerChannels = new IdLookup<IChannel>();
-            _incoming = new EnumLookup<BaseCommand.Type, Action<BaseCommand>>(cmd => _requestResponseHandler.Incoming(cmd));
+
+            _incoming = new EnumLookup<BaseCommand.Type, Action<BaseCommand>>(cmd
+                => _requestResponseHandler.Incoming(cmd));
             _incoming.Set(BaseCommand.Type.CloseConsumer, cmd => Incoming(cmd.CloseConsumer));
             _incoming.Set(BaseCommand.Type.CloseProducer, cmd => Incoming(cmd.CloseProducer));
             _incoming.Set(BaseCommand.Type.ActiveConsumerChange, cmd => Incoming(cmd.ActiveConsumerChange));
@@ -137,7 +139,7 @@ namespace DotPulsar.Internal
             _ = response.ContinueWith(result =>
             {
                 if (result.Result.CommandType == BaseCommand.Type.Success)
-                   _consumerChannels.Remove(consumerId)?.Unsubscribed();
+                    _consumerChannels.Remove(consumerId)?.Unsubscribed();
             }, TaskContinuationOptions.OnlyOnRanToCompletion);
 
             return response;
@@ -163,6 +165,9 @@ namespace DotPulsar.Internal
         public Task<BaseCommand> Outgoing(CommandPartitionedTopicMetadata command)
             => _requestResponseHandler.Outgoing(command);
 
+        public Task<BaseCommand> Outgoing(CommandGetTopicsOfNamespace command)
+            => _requestResponseHandler.Outgoing(command);
+
         public Task<BaseCommand> Outgoing(CommandSeek command)
         {
             using (TakeConsumerSenderLock(command.ConsumerId))
@@ -183,7 +188,8 @@ namespace DotPulsar.Internal
             => _incoming.Get(command.CommandType)(command);
 
         public void Incoming(CommandMessage command, ReadOnlySequence<byte> data)
-            => _consumerChannels[command.ConsumerId]?.Received(new MessagePackage(command.MessageId, command.RedeliveryCount, data));
+            => _consumerChannels[command.ConsumerId]
+                ?.Received(new MessagePackage(command.MessageId, command.RedeliveryCount, data));
 
         public void Dispose()
         {
@@ -239,6 +245,7 @@ namespace DotPulsar.Internal
         private IDisposable TakeConsumerSenderLock(ulong consumerId)
         {
             var channel = _consumerChannels[consumerId];
+
             if (channel is null)
                 throw new OperationCanceledException();
 
@@ -248,6 +255,7 @@ namespace DotPulsar.Internal
         private IDisposable TakeProducerSenderLock(ulong producerId)
         {
             var channel = _producerChannels[producerId];
+
             if (channel is null)
                 throw new OperationCanceledException();
 

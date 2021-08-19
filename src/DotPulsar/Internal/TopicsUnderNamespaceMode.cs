@@ -14,13 +14,10 @@
 
 namespace DotPulsar.Internal.Abstractions
 {
-    using System;
-    using System.Threading;
-    using System.Threading.Tasks;
-
-    public interface IConnectionPool : IAsyncDisposable
+    public enum GetTopicsUnderNamespaceMode
     {
-        ValueTask<IConnection> FindConnectionForTopic(string topic, CancellationToken cancellationToken = default);
-        ValueTask<IConnection> GetConnection(Uri serviceUrl, CancellationToken cancellationToken = default);
+        PERSISTENT,
+        NON_PERSISTENT,
+        ALL
     }
 }
