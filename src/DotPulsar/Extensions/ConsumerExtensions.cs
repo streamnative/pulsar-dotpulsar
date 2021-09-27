@@ -85,7 +85,7 @@ namespace DotPulsar.Extensions
 
                 activity?.Dispose();
 
-                await consumer.Acknowledge(message.MessageId, cancellationToken).ConfigureAwait(false);
+                await consumer.Acknowledge(message, cancellationToken).ConfigureAwait(false);
             }
         }
 

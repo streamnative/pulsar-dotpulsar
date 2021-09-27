@@ -12,15 +12,10 @@
  * limitations under the License.
  */
 
-namespace DotPulsar.Internal.Abstractions
+namespace DotPulsar.Exceptions
 {
-    using DotPulsar.Abstractions;
-    using PulsarApi;
-    using System.Buffers;
-
-    public interface IMessageFactory<TValue>
+    public sealed class ConsumerNotActiveException : DotPulsarException
     {
-        IMessage<TValue> Create(string topic, MessageId messageId, uint redeliveryCount, ReadOnlySequence<byte> data, MessageMetadata metadata,
-            SingleMessageMetadata? singleMetadata = null);
+        public ConsumerNotActiveException(string message) : base(message) { }
     }
 }

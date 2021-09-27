@@ -16,8 +16,11 @@ namespace DotPulsar.Internal
 {
     using Abstractions;
     using DotPulsar.Abstractions;
+    using DotPulsar.Exceptions;
     using DotPulsar.Internal.Extensions;
     using Events;
+    using Extensions;
+    using Microsoft.Extensions.ObjectPool;
     using System;
     using System.Buffers;
     using System.Threading;
@@ -93,7 +96,7 @@ namespace DotPulsar.Internal
         private async ValueTask<MessageId> InternalSend(PulsarApi.MessageMetadata metadata, ReadOnlySequence<byte> data, CancellationToken cancellationToken)
         {
             var response = await _channel.Send(metadata, data, cancellationToken).ConfigureAwait(false);
-            return response.MessageId.ToMessageId();
+            return response.MessageId.ToMessageId(Topic);
         }
 
         public async Task EstablishNewChannel(CancellationToken cancellationToken)
