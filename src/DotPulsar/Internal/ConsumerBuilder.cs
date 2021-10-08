@@ -112,9 +112,19 @@ namespace DotPulsar.Internal
             if (string.IsNullOrEmpty(_subscriptionName))
                 throw new ConfigurationException("SubscriptionName may not be null or empty");
 
-            if (_topicNames.Count == 0 && _topicsPattern == null)
+            if (!string.IsNullOrEmpty(_topicsPattern))
             {
-                throw new ConfigurationException("Topic name must be provided");
+                if (_topicNames != null && _topicNames.Count != 0)
+                {
+                    throw new ConfigurationException("Topic names list must be null when use topicsPattern");
+                }
+            }
+            else
+            {
+                if (_topicNames == null || _topicNames.Count == 0)
+                {
+                    throw new ConfigurationException("Topic names list cannot be null");
+                }
             }
 
             var options = new ConsumerOptions<TMessage>(_subscriptionName!, _topicNames, _schema)

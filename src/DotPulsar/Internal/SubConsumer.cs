@@ -22,6 +22,7 @@ namespace DotPulsar.Internal
     using Microsoft.Extensions.ObjectPool;
     using PulsarApi;
     using System;
+    using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Linq;
     using System.Threading;
@@ -105,7 +106,9 @@ namespace DotPulsar.Internal
         }
 
         private async ValueTask<IMessage<TMessage>> ReceiveMessage(string topic, CancellationToken cancellationToken)
-            => await _channel.Receive(topic, cancellationToken).ConfigureAwait(false);
+        {
+            return await _channel.Receive(topic, cancellationToken).ConfigureAwait(false);
+        }
 
         public async ValueTask Acknowledge(IMessageId messageId, CancellationToken cancellationToken)
             => await Acknowledge(messageId, CommandAck.AckType.Individual, cancellationToken).ConfigureAwait(false);

@@ -211,7 +211,7 @@ namespace DotPulsar.IntegrationTests
                 if (await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(5))) != task)
                     throw new TimeoutException(timeoutErrMsg);
             };
-            act.Should().NotThrow<TimeoutException>(timeoutErrMsg);
+            await act.Should().NotThrowAsync<TimeoutException>(timeoutErrMsg);
         }
 
         [Fact]

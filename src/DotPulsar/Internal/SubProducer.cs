@@ -16,11 +16,8 @@ namespace DotPulsar.Internal
 {
     using Abstractions;
     using DotPulsar.Abstractions;
-    using DotPulsar.Exceptions;
-    using DotPulsar.Internal.Extensions;
-    using Events;
     using Extensions;
-    using Microsoft.Extensions.ObjectPool;
+    using Events;
     using System;
     using System.Buffers;
     using System.Threading;

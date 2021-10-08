@@ -67,7 +67,7 @@ namespace DotPulsar
         /// <summary>
         /// Initializes a new instance using the specified subscription name and topic.
         /// </summary>
-        public ConsumerOptions(string subscriptionName, ISet<string> topicNames, ISchema<TMessage> schema)
+        public ConsumerOptions(string subscriptionName, IEnumerable<string> topicNames, ISchema<TMessage> schema)
         {
             InitialPosition = DefaultInitialPosition;
             PriorityLevel = DefaultPriorityLevel;
@@ -129,7 +129,7 @@ namespace DotPulsar
         /// <summary>
         /// Set the topic names for this consumer.
         /// </summary>
-        public ISet<string> TopicNames { get; set; }
+        public IEnumerable<string> TopicNames { get; set; }
 
         /// <summary>
         /// Set the topic pattern for this consumer.

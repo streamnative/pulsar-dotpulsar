@@ -43,7 +43,7 @@ namespace DotPulsar.Internal
         private readonly AsyncReaderWriterLock _lock;
 
         private List<Task<ConsumerStateChanged>> _monitoringTasks;
-        private ConcurrentQueue<IMessage<TMessage>> _messagesQueue;
+        private ConcurrentQueue<Task<IMessage<TMessage>>> _messagesQueue;
         private int _consumersCount;
         private int _isDisposed;
         private Exception? _throw;
@@ -51,7 +51,7 @@ namespace DotPulsar.Internal
         public Uri ServiceUrl { get; }
         public string SubscriptionName { get; }
         public string Topic { get; }
-        public ISet<string>? TopicNames { get; }
+        public IEnumerable<string>? TopicNames { get; }
         public string? TopicsPattern { get; }
         public RegexSubscriptionMode RegexSubscriptionMode { get; }
         public uint NumberOfPartitions { get; }
@@ -83,24 +83,9 @@ namespace DotPulsar.Internal
             _executor = new Executor(Guid.Empty, this, _exceptionHandler);
             _isDisposed = 0;
             _consumers = new ConcurrentDictionary<string, IConsumer<TMessage>>();
-            _messagesQueue = new ConcurrentQueue<IMessage<TMessage>>();
+            _messagesQueue = new ConcurrentQueue<Task<IMessage<TMessage>>>();
             _lock = new AsyncReaderWriterLock();
             _monitoringTasks = new List<Task<ConsumerStateChanged>>();
-
-            if (!string.IsNullOrEmpty(TopicsPattern))
-            {
-                if (TopicNames != null && TopicNames.Count != 0)
-                {
-                    throw new ArgumentException("Topic names list must be null when use topicsPattern");
-                }
-            }
-            else
-            {
-                if (TopicNames == null || TopicNames.Count == 0)
-                {
-                    throw new ArgumentException("Topic names list cannot be null");
-                }
-            }
 
             _ = Setup();
         }
@@ -168,27 +153,27 @@ namespace DotPulsar.Internal
 
         private async Task TopicChangesMonitor(IReadOnlyCollection<string> topics)
         {
-            var delay = TimeSpan.FromMilliseconds(AutoUpdatePartitionsInterval.TotalMilliseconds);
+            var delay = (int) AutoUpdatePartitionsInterval.TotalMilliseconds;
 
             while (!_cts.IsCancellationRequested)
             {
                 await Task.Delay(delay);
 
-                using (_lock.WriterLock())
+                try
                 {
-                    try
+                    var oldTopics = _consumers.Keys;
+                    var newTopics = await GenerateSubscriptionTopics(topics);
+
+                    if (newTopics.OrderBy(n => n).SequenceEqual(oldTopics.OrderBy(n => n)))
                     {
-                        var oldTopics = _consumers.Keys;
-                        var newTopics = await GenerateSubscriptionTopics(topics);
-
                         // Not changed
-                        if (newTopics.OrderBy(n => n).SequenceEqual(oldTopics.OrderBy(n => n)))
-                        {
-                            continue;
-                        }
+                        continue;
+                    }
 
-                        List<IMessage<TMessage>> newMessagesQueue = _messagesQueue.ToList();
-                        List<Task<ConsumerStateChanged>> newMonitoringTasks = _monitoringTasks.ToList();
+                    using (_lock.WriterLock())
+                    {
+                        var newMessagesQueue = _messagesQueue.ToList();
+                        var newMonitoringTasks = _monitoringTasks.ToList();
 
                         var removeTopics = oldTopics.Where(x => !newTopics.Contains(x)).ToList();
 
@@ -197,8 +182,9 @@ namespace DotPulsar.Internal
                             _consumers.TryRemove(n, out var consumer);
                             consumer?.DisposeAsync();
 
-                            newMessagesQueue = newMessagesQueue.Where(m => !m.Topic.Equals(n)).ToList();
-                            newMonitoringTasks = newMonitoringTasks.Where(m => !m.Result.Consumer.Topic.Equals(n)).ToList();
+                            newMessagesQueue = newMessagesQueue.Where(m => !m.Result.Topic.Equals(n)).ToList();
+                            newMonitoringTasks = newMonitoringTasks.Where(m => !m.Result.Consumer.Topic.Equals(n))
+                                .ToList();
                         });
 
                         var addTopics = newTopics.Where(x => !oldTopics.Contains(x)).ToList();
@@ -207,17 +193,17 @@ namespace DotPulsar.Internal
                         {
                             var consumer = CreateSubConsumer(topic);
                             _consumers.TryAdd(topic, consumer);
-                            newMonitoringTasks!.Add(consumer.StateChangedFrom(ConsumerState.Disconnected, _cts.Token).AsTask());
+                            newMonitoringTasks.Add(consumer.StateChangedFrom(ConsumerState.Disconnected, _cts.Token).AsTask());
                         });
 
                         _monitoringTasks = newMonitoringTasks;
-                        _messagesQueue = new ConcurrentQueue<IMessage<TMessage>>(newMessagesQueue);
+                        _messagesQueue = new ConcurrentQueue<Task<IMessage<TMessage>>>(newMessagesQueue);
                         Interlocked.Exchange(ref _consumersCount, _monitoringTasks.Count);
                     }
-                    catch (Exception)
-                    {
-                        // ignored
-                    }
+                }
+                catch (Exception)
+                {
+                    // ignored
                 }
             }
         }
@@ -329,7 +315,7 @@ namespace DotPulsar.Internal
             var mode = ConvertRegexSubscriptionMode(RegexSubscriptionMode);
             NamespaceName namespaceName = destination.GetNamespaceName();
 
-            var pbMode = mode switch
+            var patternTopicMode = mode switch
             {
                 GetTopicsUnderNamespaceMode.PERSISTENT => CommandGetTopicsOfNamespace.ModeType.Persistent,
                 GetTopicsUnderNamespaceMode.NON_PERSISTENT => CommandGetTopicsOfNamespace.ModeType.NonPersistent,
@@ -337,7 +323,7 @@ namespace DotPulsar.Internal
                 _ => throw new ArgumentOutOfRangeException()
             };
 
-            var req = new CommandGetTopicsOfNamespace { Namespace = namespaceName.ToString(), Mode = pbMode };
+            var req = new CommandGetTopicsOfNamespace { Namespace = namespaceName.ToString(), Mode = patternTopicMode };
             var connection = await _connectionPool.GetConnection(ServiceUrl, _cts.Token).ConfigureAwait(false);
             var response = await connection.Send(req, _cts.Token).ConfigureAwait(false);
             response.Expect(BaseCommand.Type.GetTopicsOfNamespaceResponse);
@@ -438,43 +424,43 @@ namespace DotPulsar.Internal
 
             using (_lock.ReaderLock())
             {
-                if (_messagesQueue.TryDequeue(out var message))
+                while (_messagesQueue.Count(n => n.IsCompleted) != 0)
                 {
-                    return message;
-                }
-
-                var cts = new CancellationTokenSource();
-
-                while (!cts.IsCancellationRequested)
-                {
-                    var done = false;
-
-                    Task<IMessage<TMessage>>[] receiveTasks = _consumers.Values.Select(consumer => consumer.Receive(cts.Token).AsTask()).ToArray();
-                    await Task.WhenAny(receiveTasks).ConfigureAwait(false);
-
-                    receiveTasks.Where(t => t.IsCompleted).ToList().ForEach(t =>
-                        {
-                            if (t.Result == null)
-                            {
-                                return;
-                            }
-
-                            done = true;
-                            _messagesQueue.Enqueue(t.Result);
-                        }
-                    );
-
-                    if (done)
+                    var removed = _messagesQueue.TryDequeue(out var message);
+                    if (!removed || message == null)
                     {
-                        break;
+                        continue;
+                    }
+
+                    if (message.IsCompleted)
+                    {
+                        return message.Result;
+                    }
+
+                    if (message.IsCanceled == false && message.IsFaulted == false)
+                    {
+                        _messagesQueue.Enqueue(message);
                     }
                 }
 
-                cts.Cancel();
-                cts.Dispose();
+                var receiveTasks = _consumers.Values
+                    .Select(consumer => consumer.Receive(cancellationToken).AsTask()).ToList();
+                await Task.WhenAny(receiveTasks);
 
-                _messagesQueue.TryDequeue(out var result);
-                return result;
+                IMessage<TMessage>? result = null;
+                receiveTasks.ForEach(t =>
+                {
+                    if (result == null && t.IsCompleted)
+                    {
+                        result = t.Result;
+                    }
+                    else
+                    {
+                        _messagesQueue.Enqueue(t);
+                    }
+                });
+
+                return result!;
             }
         }
 
@@ -578,7 +564,8 @@ namespace DotPulsar.Internal
 
                 using (_lock.ReaderLock())
                 {
-                    if (_consumers.Values.All(n => messageId.Equals(null) && n.NumberOfPartitions != 0) || IsIllegalMultiTopicsMessageId(messageId))
+                    if (_consumers.Values.All(n => messageId.Equals(null) && n.NumberOfPartitions != 0) ||
+                        IsIllegalMultiTopicsMessageId(messageId))
                     {
                         throw new ArgumentException("Illegal messageId can only be earliest/latest.");
                     }
@@ -587,7 +574,7 @@ namespace DotPulsar.Internal
                         consumer.Seek(messageId, cancellationToken).AsTask()
                     );
                     await Task.WhenAll(tasks.ToArray()).ConfigureAwait(false);
-                    _messagesQueue = new ConcurrentQueue<IMessage<TMessage>>();
+                    _messagesQueue = new ConcurrentQueue<Task<IMessage<TMessage>>>();
                 }
             }, cancellationToken).ConfigureAwait(false);
         }
@@ -606,7 +593,7 @@ namespace DotPulsar.Internal
                         consumer.Seek(publishTime, cancellationToken).AsTask()
                     );
                     await Task.WhenAll(tasks.ToArray()).ConfigureAwait(false);
-                    _messagesQueue = new ConcurrentQueue<IMessage<TMessage>>();
+                    _messagesQueue = new ConcurrentQueue<Task<IMessage<TMessage>>>();
                 }
             }, cancellationToken).ConfigureAwait(false);
         }

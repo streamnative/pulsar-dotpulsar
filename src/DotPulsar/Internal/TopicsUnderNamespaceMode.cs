@@ -12,7 +12,7 @@
  * limitations under the License.
  */
 
-namespace DotPulsar.Internal.Abstractions
+namespace DotPulsar.Internal
 {
     public enum GetTopicsUnderNamespaceMode
     {

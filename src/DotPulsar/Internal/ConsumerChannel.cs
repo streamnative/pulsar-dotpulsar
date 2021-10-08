@@ -87,12 +87,6 @@ namespace DotPulsar.Internal
                     if (message is not null)
                         return message;
 
-                    // Avoid waiting until an empty queue.
-                    if (_queue.Count == 0)
-                    {
-                        return null;
-                    }
-
                     var messagePackage = await _queue.Dequeue(cancellationToken).ConfigureAwait(false);
 
                     if (!messagePackage.ValidateMagicNumberAndChecksum())

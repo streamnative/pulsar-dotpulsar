@@ -204,11 +204,9 @@ namespace DotPulsar.Internal
                     using (await _lock.Lock(cancellationToken).ConfigureAwait(false))
                     {
                         var serviceUrls = _connections.Keys;
-
                         foreach (var serviceUrl in serviceUrls)
                         {
                             var connection = _connections[serviceUrl];
-
                             if (connection is null)
                                 continue;
 

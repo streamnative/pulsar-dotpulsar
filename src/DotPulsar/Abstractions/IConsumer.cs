@@ -51,11 +51,6 @@ namespace DotPulsar.Abstractions
         string Topic { get; }
 
         /// <summary>
-        /// The consumer's topic list.
-        /// </summary>
-        ISet<string>? TopicNames { get; }
-
-        /// <summary>
         /// The consumer's topic pattern.
         /// </summary>
         string? TopicsPattern { get; }
